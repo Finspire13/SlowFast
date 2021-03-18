@@ -385,7 +385,7 @@ class SlowFast(nn.Module):
                 act_func=cfg.MODEL.HEAD_ACT,
             )
 
-    def forward(self, x, bboxes=None):
+    def forward(self, x, bboxes=None, extract_feature=False):
         x = self.s1(x)
         x = self.s1_fuse(x)
         x = self.s2(x)
@@ -398,10 +398,37 @@ class SlowFast(nn.Module):
         x = self.s4(x)
         x = self.s4_fuse(x)
         x = self.s5(x)
-        if self.enable_detection:
-            x = self.head(x, bboxes)
+        
+        # (Pdb) x[0].shape
+        # torch.Size([5, 2048, 8, 8, 8])
+        # (Pdb) x[1].shape
+        # torch.Size([5, 256, 32, 8, 8])
+                
+        if not extract_feature:
+            if self.enable_detection:
+                x = self.head(x, bboxes)
+            else:
+                x = self.head(x)
         else:
-            x = self.head(x)
+            
+            assert (
+                len(x) == self.num_pathways
+            ), "Input tensor does not contain {} pathway".format(self.num_pathways)
+            pool_out = []
+            for pathway in range(self.num_pathways):
+                m = getattr(self.head, "pathway{}_avgpool".format(pathway))
+                pool_out.append(m(x[pathway]))
+            
+            x = torch.cat(pool_out, 1)
+
+            # (N, C, T, H, W) -> (N, T, H, W, C).
+            x = x.permute((0, 2, 3, 4, 1))
+            # Perform dropout.
+            if hasattr(self, "dropout"):
+                x = self.dropout(x)
+                
+            x = x.mean([1, 2, 3])
+                
         return x
 
 
@@ -584,7 +611,7 @@ class ResNet(nn.Module):
                 act_func=cfg.MODEL.HEAD_ACT,
             )
 
-    def forward(self, x, bboxes=None):
+    def forward(self, x, bboxes=None, extract_feature=False):
         x = self.s1(x)
         x = self.s2(x)
         for pathway in range(self.num_pathways):
@@ -593,11 +620,37 @@ class ResNet(nn.Module):
         x = self.s3(x)
         x = self.s4(x)
         x = self.s5(x)
-        if self.enable_detection:
-            x = self.head(x, bboxes)
+
+        # (Pdb) x[0].shape
+        # torch.Size([5, 2048, 4, 8, 8])
+                
+        if not extract_feature:
+            if self.enable_detection:
+                x = self.head(x, bboxes)
+            else:
+                x = self.head(x)
         else:
-            x = self.head(x)
+            
+            assert (
+                len(x) == self.num_pathways
+            ), "Input tensor does not contain {} pathway".format(self.num_pathways)
+            pool_out = []
+            for pathway in range(self.num_pathways):
+                m = getattr(self.head, "pathway{}_avgpool".format(pathway))
+                pool_out.append(m(x[pathway]))
+            
+            x = torch.cat(pool_out, 1)
+
+            # (N, C, T, H, W) -> (N, T, H, W, C).
+            x = x.permute((0, 2, 3, 4, 1))
+            # Perform dropout.
+            if hasattr(self, "dropout"):
+                x = self.dropout(x)
+                
+            x = x.mean([1, 2, 3])
+                
         return x
+    
 
 
 @MODEL_REGISTRY.register()
