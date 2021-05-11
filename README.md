@@ -2,7 +2,8 @@
 
 1. Install PySlowFast with the instructions below.
 2. Prepare config files (yaml) and trained models (pkl).
-3. Run the feature extraction code. Examples:
+3. Modify the parameters in `tools/extract_feature.py` as needed.
+4. Run the feature extraction code. Examples:
 
 `python -u tools/extract_feature.py --cfg SLOWFAST_8x8_R50.yaml TEST.CHECKPOINT_FILE_PATH SLOWFAST_8x8_R50.pkl OUTPUT_DIR /data/output DATA.PATH_TO_DATA_DIR /data/input` 
 
